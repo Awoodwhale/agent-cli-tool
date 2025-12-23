@@ -259,17 +259,37 @@ class Agent:
             console = self.rich_console
 
             has_thinking = False
-            content_buffer = ""
+
+            # ===== 完整内容（用于最终 print / message）=====
+            full_buffer: list[str] = [""]
+
+            # ===== 可视内容（只保留终端高度）=====
+            visible_lines: list[str] = [""]
 
             char_queue: List[str] = []
-            render_interval = 0.02  # 刷新频率
+            render_interval = 0.02
             last_render = 0.0
 
+            def push_char(buf: list[str], ch: str):
+                if not buf:
+                    buf.append("")
+                if ch == "\n":
+                    buf.append("")
+                else:
+                    buf[-1] += ch
+
+            def sync_visible():
+                height = console.size.height
+                # 留 1 行缓冲，避免抖动
+                max_lines = max(3, height - 1)
+                return "\n".join(visible_lines[-max_lines:])
+
             with self.rich_live_clz(
-                self.rich_markdown_clz("", code_theme=self.rich_style),
+                "",
                 console=console,
                 refresh_per_second=30,
                 vertical_overflow="crop",
+                transient=True,
             ) as live:
                 for chunk in response:
                     delta = chunk.choices[0].delta
@@ -280,7 +300,6 @@ class Agent:
                             has_thinking = False
                             char_queue.extend(f"\n> {self.think_end_emoji}\n\n")
 
-                        # token → 拆成字符队列
                         char_queue.extend(delta.content)
 
                     # ===== thinking =====
@@ -289,42 +308,56 @@ class Agent:
                             if not has_thinking:
                                 has_thinking = True
                                 char_queue.extend(f"\n> {self.think_start_emoji}\n\n")
-
                             char_queue.extend(delta.reasoning_content)
 
-                    # ===== 吐字符（关键）=====
+                    # ===== 吐字符 =====
                     now = self.rich_get_time()
                     if char_queue and (now - last_render) >= render_interval:
-                        # 一次吐几个字符，避免太慢
                         burst = 5
                         for _ in range(min(burst, len(char_queue))):
-                            content_buffer += char_queue.pop(0)
+                            ch = char_queue.pop(0)
+                            push_char(full_buffer, ch)
+                            push_char(visible_lines, ch)
 
-                        markdown_text = content_buffer
                         live.update(
                             self.rich_markdown_clz(
-                                markdown_text, code_theme=self.rich_style
-                            ),
+                                sync_visible(),
+                                code_theme=self.rich_style,
+                            )
                         )
                         last_render = now
 
                 # ===== flush 剩余字符 =====
-                if char_queue:
-                    content_buffer += "".join(char_queue)
-                    live.update(
-                        self.rich_markdown_clz(
-                            content_buffer, code_theme=self.rich_style
-                        ),
-                    )
+                while char_queue:
+                    ch = char_queue.pop(0)
+                    push_char(full_buffer, ch)
+                    push_char(visible_lines, ch)
 
-            # 将AI回答记录到上下文
-            self.ai.messages.append(self.ai.ai_message(content_buffer))
-            ai_reply = self.after_ask_ai(content_buffer)
+                live.update(
+                    self.rich_markdown_clz(
+                        sync_visible(),
+                        code_theme=self.rich_style,
+                    )
+                )
+
+                live.update("")
+
+            full_answer = "\n".join(full_buffer).strip()
+            self.ai.messages.append(self.ai.ai_message(full_answer))
+            full_answer = self.after_ask_ai(full_answer)
+
+            self.rich_console.print(
+                self.rich_markdown_clz(
+                    full_answer,
+                    code_theme=self.rich_style,
+                )
+            )
 
             if self.cli_args.conversation:
                 self.output_io.write("\n")
 
-            return ai_reply
+            self.output_io.flush()
+            return full_answer
 
         return rich_sysout() if self.cli_args.rich else default_sysout()
 

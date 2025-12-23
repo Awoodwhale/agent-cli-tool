@@ -12,3 +12,4 @@ wheels/
 # config file
 .env
 .DS_Store
+uv.lock

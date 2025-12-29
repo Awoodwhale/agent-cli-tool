@@ -7,7 +7,7 @@ from .plugins import after_ai_ask, before_ai_ask
 
 
 def main():
-    model = env_config.get("DEFAULT_MODEL")
+    model = cli_args.model or env_config.get("DEFAULT_MODEL")
     assert model, "AI model is required!"
 
     agent = Agent(

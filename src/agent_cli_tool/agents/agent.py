@@ -279,7 +279,8 @@ class Agent:
             if not self.cli_args.ignore_user:
                 self.renderer.render_user_info(prompt_show)
 
-            self.renderer.render_user_input(prompt)
+            if self.mode == "default":
+                self.renderer.render_user_input(prompt)
             self.ask_ai(prompt)
 
         if self.cli_args.conversation or not self.cli_args.prompt:

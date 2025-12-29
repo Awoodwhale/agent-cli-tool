@@ -147,6 +147,41 @@ class Agent:
         from ..config import save_config
 
         save_config(config_text)
+        self._reload_ai_config()
+
+    def _reload_ai_config(self) -> None:
+        """重新加载 AI 配置（从 config 模块读取新配置并更新 BaseAI 实例）"""
+        from ..config import reload_config
+
+        env_config = reload_config()
+
+        # 读取新的配置值
+        api_key = env_config.get("API_KEY")
+        base_url = env_config.get("BASE_URL")
+        model = env_config.get("DEFAULT_MODEL")
+        timeout = int(env_config.get("TIMEOUT") or 60)
+        stream = (env_config.get("STREAM") or "true").lower() == "true"
+
+        if not api_key or not base_url:
+            return
+
+        # 更新 AI 实例的属性
+        self.ai.model = model
+        self.ai.stream = stream
+
+        # 重新创建 OpenAI 客户端（因为 timeout/api_key/base_url 可能改变）
+        from openai import OpenAI, AsyncOpenAI
+
+        self.ai.client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+        )
+        self.ai.async_client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+        )
 
     def _on_history_deleted(self, session_id: str, history_id: str) -> None:
         """历史记录删除后的回调"""
@@ -256,7 +291,11 @@ class Agent:
         """
         # TUI 模式直接运行 TUI 应用
         if isinstance(self.renderer, TUIRenderer):
-            self.renderer.run(ask_ai_async=self.ask_ai_async, ai=self.ai)
+            self.renderer.run(
+                (self.cli_args.prompt or "").strip(),
+                ask_ai_async=self.ask_ai_async,
+                ai=self.ai,
+            )
             return
 
         # 非 TUI 模式，使用 renderer 处理用户输入

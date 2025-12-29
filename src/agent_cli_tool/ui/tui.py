@@ -221,7 +221,9 @@ class ChatApp(App):
         ai: BaseAI,  # BaseAI 实例，用于访问 AI 上下文和发送消息
         think_start_emoji: str,
         think_end_emoji: str,
+        textual_style: str,
         use_markdown: bool = True,
+        prompt: str = "",
     ):
         super().__init__()
 
@@ -236,6 +238,8 @@ class ChatApp(App):
         self.ask_ai_async = ask_ai_async
         self.think_start_emoji = think_start_emoji
         self.think_end_emoji = think_end_emoji
+        self.prompt = prompt
+        self.theme = textual_style
 
         # ===== 配置和历史文件路径（使用 config 模块的路径） =====
         self._config_file = (
@@ -314,8 +318,10 @@ class ChatApp(App):
     def on_mount(self):
         self._load_config()
         self._load_history()
+
+    async def on_ready(self):
         self.set_focus(self.user_input)
-        self.theme = "tokyo-night"
+        await self._send_current_input(self.prompt)
 
     def on_unmount(self):
         """程序退出时保存历史记录"""
@@ -342,7 +348,7 @@ class ChatApp(App):
                 self.notify(f"AI错误: {response}", severity="error", timeout=5.0)
                 if self.current_history:
                     self.current_history.reply = self._ai_buffer
-                self.ai_output.update(self._ai_buffer)
+                self.set_ai_output(self._ai_buffer)
                 return
 
             # Stream the response using async iteration
@@ -356,6 +362,7 @@ class ChatApp(App):
                 if hasattr(delta, "content") and delta.content:
                     if has_thinking:
                         self._ai_buffer += f"\n> {self.think_end_emoji}\n\n"
+                        has_thinking = False
 
                     content = delta.content
                     self._ai_buffer += content
@@ -363,7 +370,7 @@ class ChatApp(App):
                     if self.current_history:
                         self.current_history.reply = self._ai_buffer
 
-                    self.ai_output.update(self._ai_buffer)
+                    self.set_ai_output(self._ai_buffer)
                     self.ai_scroll.scroll_end(animate=False)
 
                 # Thinking/reasoning content (for DeepSeek models)
@@ -379,7 +386,7 @@ class ChatApp(App):
                     if self.current_history:
                         self.current_history.reply = self._ai_buffer
 
-                    self.ai_output.update(self._ai_buffer)
+                    self.set_ai_output(self._ai_buffer)
                     self.ai_scroll.scroll_end(animate=False)
 
             # 流结束后确保滚动到底部
@@ -393,7 +400,7 @@ class ChatApp(App):
             self.notify(error_msg, severity="error", timeout=3.0)
             if self.current_history:
                 self.current_history.reply = self._ai_buffer
-            self.ai_output.update(self._ai_buffer)
+            self.set_ai_output(self._ai_buffer)
         finally:
             self._streaming = False
 
@@ -408,11 +415,11 @@ class ChatApp(App):
         return self._ai_buffer
 
     # ---------- Ctrl+D 发送 ----------
-    async def _send_current_input(self):
+    async def _send_current_input(self, arg_input: str = ""):
         if self._streaming:
             return
 
-        prompt = self.user_input.text.strip()
+        prompt = arg_input.strip() or self.user_input.text.strip()
         if not prompt:
             return
 
@@ -720,6 +727,7 @@ class ChatApp(App):
         self.ai_output.update(content)
 
     def set_user_input(self, content: str):
+        self.prompt = content
         self.user_input.load_text(content)
 
     # ---------- Actions ----------
@@ -785,7 +793,7 @@ class ChatApp(App):
         node.expand()
 
         self.history_tree.select_node(node)
-        self.ai_output.update("")
+        self.set_ai_output("")
         self.current_node = node
 
         # 清空 AI 上下文（新 session 从空白开始）
@@ -827,6 +835,7 @@ class TUIRenderer(BaseRenderer):
         use_markdown: bool = True,
         think_start_emoji: str = "🤔 [Start Thinking]",
         think_end_emoji: str = "💡 [End Thinking]",
+        textual_style: str = "tokyo-night",
         **kwargs,
     ):
         """Initialize TUI renderer.
@@ -850,6 +859,7 @@ class TUIRenderer(BaseRenderer):
         self.use_markdown = use_markdown
         self.think_start_emoji = think_start_emoji
         self.think_end_emoji = think_end_emoji
+        self.textual_style = textual_style
 
     def render_ai_info(self, model: str) -> None:
         """TUI handles AI info internally."""
@@ -877,7 +887,7 @@ class TUIRenderer(BaseRenderer):
             "Do not call get_user_input() in TUI mode."
         )
 
-    def run(self, ask_ai_async: Callable, ai: BaseAI) -> None:
+    def run(self, prompt: str, ask_ai_async: Callable, ai: BaseAI) -> None:
         """Run the TUI application.
 
         Args:
@@ -895,5 +905,7 @@ class TUIRenderer(BaseRenderer):
             ai=ai,
             think_start_emoji=self.think_start_emoji,
             think_end_emoji=self.think_end_emoji,
+            textual_style=self.textual_style,
+            prompt=prompt,
         )
         self.app.run()

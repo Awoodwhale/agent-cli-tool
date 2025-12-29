@@ -40,7 +40,6 @@ def create_renderer(mode: str, **kwargs) -> BaseRenderer:
     ai_emoji: str = config.get("AI_EMOJI") or "🤖:"
     think_start_emoji: str = config.get("THINK_START_EMOJI") or "🤔 [Start Thinking]"
     think_end_emoji: str = config.get("THINK_END_EMOJI") or "💡 [End Thinking]"
-    rich_style = config.get("RICH_STYLE") or "github-dark"
     args = {
         "user_emoji": user_emoji,
         "ai_emoji": ai_emoji,
@@ -50,9 +49,12 @@ def create_renderer(mode: str, **kwargs) -> BaseRenderer:
     if mode == "stdout":
         return StdoutRenderer(**args)
     elif mode == "rich":
+        rich_style = config.get("RICH_STYLE") or "github-dark"
         return RichRenderer(rich_style, **args)
     elif mode == "tui":
+        textual_style = config.get("TEXTUAL_STYLE") or "tokyo-night"
         return TUIRenderer(
+            textual_style=textual_style,
             think_start_emoji=think_start_emoji,
             think_end_emoji=think_end_emoji,
             **kwargs,

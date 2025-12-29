@@ -13,3 +13,6 @@ wheels/
 .env
 .DS_Store
 uv.lock
+.claude/
+.baidu-cc/
+CLAUDE.md

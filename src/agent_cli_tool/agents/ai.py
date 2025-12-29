@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from openai.types.chat import ChatCompletion
 
 
@@ -33,13 +33,27 @@ class BaseAI:
             base_url=base_url,
             timeout=timeout,
         )
+        self.async_client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+        )
         self.stream = stream
         self.tools = tools
         self.model = model
-        self.messages = (
+        self.system_prompt = system_prompt
+        self.messages = self.get_init_messages(messages)
+
+    def get_init_messages(
+        self,
+        messages: Optional[List[Dict[str, str]]] = None,
+    ):
+        return (
             messages
             if messages is not None
-            else ([self.system_message(system_prompt)] if system_prompt else [])
+            else [self.system_message(self.system_prompt)]
+            if self.system_prompt
+            else []
         )
 
     def system_message(self, content: str) -> Dict[str, str]:
@@ -81,12 +95,29 @@ class BaseAI:
 
     def send_messages(self) -> ChatCompletion:
         """
-        发送消息并获取响应。
+        发送消息并获取响应（同步版本）。
 
         :return: OpenAI的ChatCompletion响应对象
         """
         try:
             return self.client.chat.completions.create(
+                model=self.model,
+                messages=self.messages,
+                tools=self.tools,
+                stream=self.stream,
+            )
+        except Exception as e:
+            # 处理异常情况，例如网络错误或API错误
+            raise RuntimeError(f"Failed to send messages: {e}")
+
+    async def send_messages_async(self):
+        """
+        发送消息并获取响应（异步版本）。
+
+        :return: OpenAI的异步ChatCompletion流式响应对象
+        """
+        try:
+            return await self.async_client.chat.completions.create(
                 model=self.model,
                 messages=self.messages,
                 tools=self.tools,

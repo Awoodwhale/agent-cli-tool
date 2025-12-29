@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from sys import stdout
 
 from .agents import Agent
 from .cli import cli_args
@@ -15,7 +14,6 @@ def main():
         cli_args,
         model,
         env_config,
-        output_io=stdout,
         before_ai_ask_hook=before_ai_ask,
         after_ai_ask_hook=after_ai_ask,
     )

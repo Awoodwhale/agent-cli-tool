@@ -71,11 +71,12 @@ parser.add_argument(
     default="",
 )
 parser.add_argument(
-    "-r",
-    "--rich",
-    action="store_true",
-    help="将 AI 的输出使用 rich 进行 markdown 渲染, 默认为 false",
-    default=False,
+    "-u",
+    "--ui-mode",
+    type=str,
+    choices=["stdout", "rich", "tui"],
+    help="UI 渲染模式: stdout=纯文本, rich=Markdown 渲染, tui=交互式界面",
+    default="",
 )
 
 cli_args = parser.parse_args()
